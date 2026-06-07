@@ -65,7 +65,7 @@ FIP_TOKEN_URL = ("https://ews.fip.finra.org/fip/rest/ews/oauth2/"
                  "access_token?grant_type=client_credentials")
 DATA_BASE = "https://api.finra.org/data/group"
 SI_GROUP = os.environ.get("FINRA_SI_GROUP", "otcMarket")
-SI_DATASET = os.environ.get("FINRA_SI_DATASET", "consolidatedShortInterest")
+SI_DATASET = os.environ.get("FINRA_SI_DATASET", "EquityShortInterest")
 SYMBOL_FIELD = os.environ.get("FINRA_SI_SYMBOL_FIELD", "issueSymbolIdentifier")
 MAX_RPS = float(os.environ.get("FINRA_MAX_RPS", "3"))
 
@@ -150,14 +150,23 @@ async def _query(compare: list[dict] | None = None,
         async with httpx.AsyncClient(timeout=45.0) as client:
             return await client.post(url, json=body, headers=headers)
 
+    global _token
     token = await _get_token()
     r = await _do(token)
     if r.status_code == 401:                      # token expired/invalid -> refresh once
-        global _token
         _token = None
         r = await _do(await _get_token())
-    r.raise_for_status()
-    data = r.json()
+    txt = (r.text or "").strip()
+    if r.status_code >= 400:
+        raise RuntimeError(f"FINRA data API {r.status_code}: "
+                           f"{txt[:300] or '(empty body)'}")
+    if not txt:                                   # HTTP 200 with empty body = no rows
+        return []
+    try:
+        data = r.json()
+    except Exception:
+        raise RuntimeError(f"FINRA returned non-JSON (HTTP {r.status_code}): "
+                           f"{txt[:300]}")
     if isinstance(data, dict):                    # some FINRA datasets wrap in a key
         for k in ("data", "results", "records"):
             if isinstance(data.get(k), list):
@@ -259,23 +268,19 @@ async def short_interest(ticker: str, limit: int = 4) -> dict:
         the freshness of the latest report surfaced at the top.
     """
     sym = ticker.strip().upper()
-    # Bound to recent settlement dates so we reliably capture the newest reports
-    # (each report is ~biweekly; widen the window generously, then trim).
-    today = date.today()
-    span_days = max(60, limit * 25)
-    start_date = date.fromordinal(today.toordinal() - span_days).isoformat()
+    # Symbol-only query (no date-range filter — that was returning empty for some
+    # symbols). A single symbol has only a few hundred biweekly reports, so a high
+    # limit returns the full history; we sort newest-first and trim client-side.
     rows = await _query(
         compare=[{"compareType": "EQUAL", "fieldName": SYMBOL_FIELD, "fieldValue": sym}],
-        date_range=[{"fieldName": "settlementDate",
-                     "startDate": start_date, "endDate": today.isoformat()}],
-        limit=200,
+        limit=1000,
     )
     shaped = [_shape(r) for r in rows]
     shaped.sort(key=lambda x: x.get("settlement_date") or "", reverse=True)
     shaped = shaped[:max(1, limit)]
     if not shaped:
         return {"ticker": sym, "found": False,
-                "note": "No reports in the recent window. The symbol may have no "
+                "note": "No reports returned for this symbol. It may have no "
                         "reported short position, or the dataset/field names need "
                         "adjusting (see FINRA_SI_* settings)."}
     return {
@@ -330,19 +335,15 @@ async def check_si_freshness(ticker: str) -> dict:
         score-vs-proxy recommendation.
     """
     sym = ticker.strip().upper()
-    today = date.today()
-    start_date = date.fromordinal(today.toordinal() - 90).isoformat()
     rows = await _query(
         compare=[{"compareType": "EQUAL", "fieldName": SYMBOL_FIELD, "fieldValue": sym}],
-        date_range=[{"fieldName": "settlementDate",
-                     "startDate": start_date, "endDate": today.isoformat()}],
-        limit=60,
+        limit=1000,
     )
     shaped = [_shape(r) for r in rows]
     shaped.sort(key=lambda x: x.get("settlement_date") or "", reverse=True)
     if not shaped:
         return {"ticker": sym, "found": False,
-                "note": "No recent report found to assess freshness."}
+                "note": "No report found for this symbol to assess freshness."}
     latest = shaped[0]
     return {
         "ticker": sym, "found": True,
@@ -360,7 +361,7 @@ async def check_si_freshness(ticker: str) -> dict:
 
 if __name__ == "__main__":
     import sys
-    print(f"[finra-short-interest] build-1 | dns_rebinding_protection="
+    print(f"[finra-short-interest] build-3 | dns_rebinding_protection="
           f"{_security.enable_dns_rebinding_protection} | "
           f"dataset={SI_GROUP}/{SI_DATASET} | "
           f"transport={os.environ.get('MCP_TRANSPORT', 'stdio')}",

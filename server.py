@@ -227,8 +227,9 @@ def _shape(rec: dict) -> dict:
     prev = _num(_pick(rec, "previousShortPositionQuantity",
                       "previousShortShareNumber"))
     dtc = _num(_pick(rec, "daysToCoverQuantity", "daysToCover",
-                     "averageDaysToCoverQuantity"))
-    adv = _num(_pick(rec, "averageDailyVolumeQuantity", "averageDailyVolume"))
+                     "daysToCoverNumber", "averageDaysToCoverQuantity"))
+    adv = _num(_pick(rec, "averageDailyVolumeQuantity", "averageDailyVolume",
+                     "averageShortShareNumber"))
     chg_pct = _num(_pick(rec, "changePercent", "shortInterestChangePercent",
                          "percentageChange"))
     age = _age_days(settlement)
@@ -361,7 +362,7 @@ async def check_si_freshness(ticker: str) -> dict:
 
 if __name__ == "__main__":
     import sys
-    print(f"[finra-short-interest] build-5-fieldvalue-restored | dns_rebinding_protection="
+    print(f"[finra-short-interest] build-6-dtc-fields | dns_rebinding_protection="
           f"{_security.enable_dns_rebinding_protection} | "
           f"dataset={SI_GROUP}/{SI_DATASET} | "
           f"transport={os.environ.get('MCP_TRANSPORT', 'stdio')}",

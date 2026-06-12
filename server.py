@@ -362,9 +362,10 @@ async def check_si_freshness(ticker: str) -> dict:
 
 if __name__ == "__main__":
     import sys
-    print(f"[finra-short-interest] build-6-dtc-fields | dns_rebinding_protection="
+    print(f"[finra-short-interest] build-7-banner | dns_rebinding_protection="
           f"{_security.enable_dns_rebinding_protection} | "
           f"dataset={SI_GROUP}/{SI_DATASET} | "
+          f"symbol_field={SYMBOL_FIELD} | "
           f"transport={os.environ.get('MCP_TRANSPORT', 'stdio')}",
           file=sys.stderr, flush=True)
     transport = os.environ.get("MCP_TRANSPORT", "stdio").lower()

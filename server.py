@@ -272,7 +272,7 @@ async def short_interest(ticker: str, limit: int = 4) -> dict:
     # symbols). A single symbol has only a few hundred biweekly reports, so a high
     # limit returns the full history; we sort newest-first and trim client-side.
     rows = await _query(
-        compare=[{"compareType": "EQUAL", "fieldName": SYMBOL_FIELD, "compareValue": sym}],
+        compare=[{"compareType": "EQUAL", "fieldName": SYMBOL_FIELD, "fieldValue": sym}],
         limit=1000,
     )
     shaped = [_shape(r) for r in rows]
@@ -310,8 +310,8 @@ async def short_interest_asof(ticker: str, settlement_date: str) -> dict:
     """
     sym = ticker.strip().upper()
     rows = await _query(compare=[
-        {"compareType": "EQUAL", "fieldName": SYMBOL_FIELD, "compareValue": sym},
-        {"compareType": "EQUAL", "fieldName": "settlementDate", "compareValue": settlement_date},
+        {"compareType": "EQUAL", "fieldName": SYMBOL_FIELD, "fieldValue": sym},
+        {"compareType": "EQUAL", "fieldName": "settlementDate", "fieldValue": settlement_date},
     ], limit=10)
     if not rows:
         return {"ticker": sym, "settlement_date": settlement_date, "found": False,
@@ -336,7 +336,7 @@ async def check_si_freshness(ticker: str) -> dict:
     """
     sym = ticker.strip().upper()
     rows = await _query(
-        compare=[{"compareType": "EQUAL", "fieldName": SYMBOL_FIELD, "compareValue": sym}],
+        compare=[{"compareType": "EQUAL", "fieldName": SYMBOL_FIELD, "fieldValue": sym}],
         limit=1000,
     )
     shaped = [_shape(r) for r in rows]
@@ -361,7 +361,7 @@ async def check_si_freshness(ticker: str) -> dict:
 
 if __name__ == "__main__":
     import sys
-    print(f"[finra-short-interest] build-4-comparevalue | dns_rebinding_protection="
+    print(f"[finra-short-interest] build-5-fieldvalue-restored | dns_rebinding_protection="
           f"{_security.enable_dns_rebinding_protection} | "
           f"dataset={SI_GROUP}/{SI_DATASET} | "
           f"transport={os.environ.get('MCP_TRANSPORT', 'stdio')}",
